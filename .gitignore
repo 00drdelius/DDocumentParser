@@ -1,0 +1,7 @@
+__pycache__/
+dify-agents-from*/
+splitted_*/
+*规章制度*/
+**/*.zip
+**/*.xml
+**/*.json
