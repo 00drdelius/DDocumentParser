@@ -50,32 +50,58 @@ def convert_docs_to_docxs(input_directory_or_file:str, output_directory:str=None
         raise OSError(f"Error occurred during conversion: {e.stderr.strip()}") from e
 
 
-def get_pure_pdf_text(filepath:str) -> str:
+def get_pure_pdf_text(
+    file:str | Path | bytes,
+    exclude_header:bool = False,
+    exclude_footer:bool = False,
+    exclude_pixels:int = 60,
+    ) -> list[str]:
     """
-    extract pure text from a given PDF file.
+    extract pure text from a given PDF file, with header or footer removed. 
 
     **[SPECIAL ADDRESS]** It excludes text in the header and footer areas (top and bottom 60pt of each page),
     which often contain page numbers, document titles, or other repetitive information that may interfere with main text.
 
     Args:
-        filepath (str): PDF filepath
+        file(str| Path | bytes): PDF filepath or PDF file bytes
+        exclude_header(bool): given True to exclude header
+        exclude_footer(bool): given True to exclude footer
+        exclude_pt(int): how many pt you want to exclude in header or footer?\
+        (See refer to https://en.wikipedia.org/wiki/Point_(typography) for more details on **pt** unit)
     Returns:
-        str: pure text extracted, with line breaks between paragraphs
+        out(list[str]): list of pure texts extracted from all pdf pages.
     """
-    full_text=[]
-    pdf_doc = fitz.open(filepath)
+    full_texts=[]
+    if isinstance(file, (str, Path,)):
+        pdf_doc = fitz.open(str(file))
+    elif isinstance(file, bytes):
+        pdf_doc = fitz.open(stream=file, filetype="pdf")
     for page in pdf_doc:
         rect = page.rect
-        header_area = fitz.Rect(rect.x0, rect.y0, rect.x1, rect.y0 + 60)  # usually top 60pt, header
-        footer_area = fitz.Rect(rect.x0, rect.y1 - 60, rect.x1, rect.y1)  # usually bottom 60pt, footer
+        header_area=None
+        footer_area=None
+        if exclude_header:
+            header_area = fitz.Rect(rect.x0, rect.y0, rect.x1, rect.y0 + exclude_pixels)  # usually top 60pt, header
+        if exclude_footer:
+            footer_area = fitz.Rect(rect.x0, rect.y1 - exclude_pixels, rect.x1, rect.y1)  # usually bottom 60pt, footer
+
         # extract main text（exclude header/footer）
+        page_text=[]
         words = page.get_text("words")  # (x0, y0, x1, y1, word, block_no, line_no, word_no)
-        main_text = "\n".join(
-            w[4] for w in words if not header_area.intersects(fitz.Rect(w[:4]))
-                                and not footer_area.intersects(fitz.Rect(w[:4]))
-        )
-        full_text.append(main_text.strip())
-    return "\n".join(full_text)
+        for w in words:
+            if header_area and not header_area.intersects(fitz.Rect(w[:4])):
+                page_text.append(w[4])
+
+            if footer_area and not footer_area.intersects(fitz.Rect(w[:4])):
+                page_text.append(w[4])
+        # main_text = "\n".join(
+        #     w[4] for w in words if not header_area.intersects(fitz.Rect(w[:4]))
+        #                         and not footer_area.intersects(fitz.Rect(w[:4]))
+        # )
+        page_text="\n".join(page_text)
+        full_texts.append(page_text.strip())
+
+    return full_texts
 
 
 digit_to_chn_digit={

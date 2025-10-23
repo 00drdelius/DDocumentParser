@@ -2,7 +2,7 @@ from typing import Literal, Optional
 from pathlib import Path
 import regex as re
 import json
-from tools import get_pure_text, convert_docs_to_docxs
+from dd_parser.tools import get_pure_text, convert_docs_to_docxs
 import tempfile
 
 
