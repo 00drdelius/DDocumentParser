@@ -5,6 +5,8 @@ from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
+from schemas import SupportedFileTypes, ParsedFormData
+
 app=FastAPI(
     title="DDocumentParser",
     description="document parser for parsing various complex documents into knowledge base",
@@ -31,11 +33,5 @@ async def lifespan(app:FastAPI):
     tags=["parser"],
     description="api to parse your document"
 )
-async def parse_api(
-    file: UploadFile = File(
-        ...,
-        title="parsing file",
-        description=f"file to parse. Currently support "
-    )
-):
+async def parse_api(form_data: ParsedFormData = Form(..., media_type="multipart/form-data")):
     ...
