@@ -1,7 +1,8 @@
 import enum
+import uuid
 from typing import *
 
-import uuid
+from typing_extensions import Self
 from pydantic import BaseModel, Field, model_validator
 from fastapi import UploadFile
 
@@ -17,6 +18,7 @@ class SupportedFileTypes(enum.Enum):
         """get file types that are developed"""
         return [cls.DOCX.value, cls.DOC.value, cls.PDF.value]
 
+OutputFormat:TypeAlias = Literal["json","txt"]
 
 class ParsedFormData(BaseModel):
     request_id: Optional[str] = Field(
@@ -31,12 +33,16 @@ class ParsedFormData(BaseModel):
         description="upload the file needs to be parsed")
     "upload the file needs to be parsed"
 
-    re_matcher: Optional[str] = Field(
+    re_matchers: Optional[Union[str, List[str]]] = Field(
         default=None,
         title="regular expression",
-        description="[Advanced] general regular expression to match the separator(s)( which devides text chunks). Like '章节一', '第一条', 'A.1.1', etc."
+        description=(
+            "[Advanced] general regular expression to match the separator(s)( which devides text chunks)."
+            "Like '章节一', '第一条', 'A.1.1', etc."
+            "Also you could upload multi expressions to split text with, like, '第一章', '第一章...第一条', etc."
+        )
     )
-    "regular matcher, to match the separator to devide the text chunks"
+    "regular matcher(s), to match the separator to devide the text chunks"
 
     filename_in_chunk: bool = Field(
         default=False,
@@ -45,13 +51,24 @@ class ParsedFormData(BaseModel):
     )
     "if you want to insert filename into chunks"
 
-    output_format: Literal["json","txt"] = Field(
+    output_format: OutputFormat = Field(
         default="txt",
         title="output format", description="output format. support:['json', 'txt']")
     "otuput format you want. support:['json', 'txt']"
 
+    length_limit: Optional[int] = Field(
+        title="length limit",
+        description="max length in a chunk. Every length of chunk <= length_limit. **Only used when `output_format==txt`**",)
+    "max length in a chunk. Every length of chunk <= length_limit. **Only used when `output_format==txt`**"
+
+    chunk_splitter: str = Field(
+        default="\n\n\n\n",
+        title="chunk splitter",
+        description="Text splitter for separating content. Default is `\\n\\n\\n\\n`.  **Only used when `output_format==txt`**",)
+    "Text splitter for separating content. Default is `\\n\\n\\n\\n`.  **Only used when `output_format==txt`**"
+
     @model_validator(mode="after")
-    def check_file_type_validation(self) -> Self:
+    def check_file_type_validation(self) -> Self: #NOTE `typing.Self` only applied in python311 or higher
         supported_extensions = SupportedFileTypes.get_developed()
         file_extension = self.file.filename.rsplit(".",1)[-1]
         if file_extension not in supported_extensions:
