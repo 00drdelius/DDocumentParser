@@ -9,3 +9,5 @@ instances/
 
 .env
 log/
+
+**/*.ipynb
