@@ -8,3 +8,6 @@ instances/
 **/*.json
 
 .env
+log/
+
+**/*.ipynb

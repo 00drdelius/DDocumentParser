@@ -1,0 +1,13 @@
+aiohttp
+python-dotenv
+PyMuPDF
+python-docx
+fastapi
+uvicorn
+pydantic
+typing_extensions
+regex
+rich
+aiofiles
+requests
+loguru

@@ -1,30 +1,66 @@
 import os
-from pathlib import Path
+import asyncio
+import aiohttp
 import subprocess
+import asyncio.subprocess as asubprocess
+from typing import *
+from pathlib import Path
+
 import fitz  # PyMuPDF
 from docx import Document
 from docx.oxml.ns import qn
 
+from dd_parser.logg import logger
+from dd_parser.config import MINERU_URL, HTTP_CLIENT
 
-def convert_docs_to_docxs(input_directory_or_file:str, output_directory:str=None):
+T = TypeVar("T")
+
+async def async_wrapper(callable: Callable[..., T], *args, **kwargs)-> Optional[T]:
+    """wrap sync function to be async"""
+    result =  await asyncio.to_thread(callable, *args, **kwargs)
+    return result
+
+
+def check_libreoffice():
+    try:
+        #NOTE set `check=True` to raise exception if command fails
+        process = subprocess.run(["soffice", "--version"],shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
+    else:
+        if process.returncode!=0:
+            raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
+
+
+async def acheck_libreoffice():
+    try:
+        process = await asubprocess.create_subprocess_exec(*["soffice", "--version"], stdout=asubprocess.PIPE, stderr=asubprocess.PIPE)
+        stdout, stderr = await process.communicate()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
+    else:
+        if process.returncode!=0:
+            raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
+
+
+def convert_docs_to_docxs(
+    input_directory_or_file:Union[str, Path], output_directory:Union[str,Path]=None) -> list[Path]:
     """
     single convert or batch convert all .doc files in the input_directory_or_file (including subdirectories) to .docx format
     using LibreOffice's command line interface.
     Args:
-        input_directory_or_file (str): input directory containing .doc files or filepath to a single .doc file
-        output_directory (str): output directory path where converted .docx files will be saved
+        input_directory_or_file (str | Path): input directory containing .doc files or filepath to a single .doc file
+        output_directory (str | Path): output directory path where converted .docx files will be saved
     Raises:
         ValueError: If the input directory does not exist or is not a directory
         OSError: If LibreOffice is not installed or unavailable
+    Returns:
+        out(list[Path]): list of converted file paths
     """
-    try:
-        #NOTE set `check=True` to raise exception if command fails
-        subprocess.run(["soffice", "--version"],shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
 
-    input_path = Path(input_directory_or_file)
-    output_dir = Path(output_directory)
+
+    input_path = Path(input_directory_or_file) if not isinstance(input_directory_or_file,Path) else input_directory_or_file
+    output_dir = Path(output_directory) if not isinstance(output_directory, Path) else output_directory
 
     if not input_path.exists():
         raise ValueError(f"Input path {input_path} does not exist.")
@@ -38,17 +74,67 @@ def convert_docs_to_docxs(input_directory_or_file:str, output_directory:str=None
 
     command = f'soffice --headless --convert-to docx --outdir "{str(output_dir)}" "{file_option}"'
     try:
-        print("output_dir is ", str(output_dir))
-        print("start converting by LibreOffice...")
+        logger.info("output_dir is ", str(output_dir))
+        logger.info("start converting by LibreOffice...")
         result=subprocess.run(command, shell=True, check=True,stderr=subprocess.PIPE, text=True, stdout=subprocess.PIPE)
-        print("LibreOffice output:", result.stdout or result.stderr)
+        logger.info("LibreOffice output:", result.stdout or result.stderr)
         if result.returncode == 0:
-            print("Conversion successful")
+            logger.info("Conversion successful")
         else:
             raise OSError(f"Error occurred during conversion: {result.stderr.strip()}")
     except subprocess.CalledProcessError as e:
         raise OSError(f"Error occurred during conversion: {e.stderr.strip()}") from e
+    else:
+        docx_filepaths = list(output_dir.glob("*.docx"))
+    return docx_filepaths
 
+
+async def aconvert_docs_to_docxs(
+    input_directory_or_file:Union[str, Path], output_directory:Union[str,Path]=None) -> list[Path]:
+    """
+    **async version**
+
+    single convert or batch convert all .doc files in the input_directory_or_file (including subdirectories) to .docx format
+    using LibreOffice's command line interface.
+    Args:
+        input_directory_or_file (str | Path): input directory containing .doc files or filepath to a single .doc file
+        output_directory (str | Path): output directory path where converted .docx files will be saved
+    Raises:
+        ValueError: If the input directory does not exist or is not a directory
+        OSError: If LibreOffice is not installed or unavailable
+    """
+    input_path = Path(input_directory_or_file) if not isinstance(input_directory_or_file,Path) else input_directory_or_file
+    output_dir = Path(output_directory) if not isinstance(output_directory, Path) else output_directory
+
+    if not input_path.exists():
+        raise ValueError(f"Input path {input_path} does not exist.")
+
+    # Create output directory if it does not exist
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if input_path.is_file():
+        file_option = str(input_path)
+    elif input_path.is_dir():
+        file_option = str(f'{str(input_path)}/**/*.doc')
+
+    command = [
+        'soffice','--headless','--convert-to docx','--outdir',output_dir, file_option ]
+    try:
+        logger.info("output_dir is ", str(output_dir))
+        logger.info("start converting by LibreOffice...")
+        process = await asubprocess.create_subprocess_exec(*command, stdout=asubprocess.PIPE, stderr=asubprocess.PIPE)
+        stdout, stderr = await process.communicate()
+        stdout = stdout.decode("utf8")
+        stderr = stderr.decode("utf8")
+        logger.info("LibreOffice output:", stdout or stderr)
+        if process.returncode == 0:
+            logger.info("Conversion successful")
+        else:
+            raise OSError(f"Error occurred during conversion: {stderr}")
+    except subprocess.CalledProcessError as e:
+        raise OSError(f"Error occurred during conversion: {stderr}") from e
+    else:
+        docx_filepaths = list(output_dir.glob("*.docx"))
+    return docx_filepaths
 
 def get_pure_pdf_text(
     file:str | Path | bytes,
@@ -108,7 +194,7 @@ digit_to_chn_digit={
     1:"一",2:"二",3:"三",4:"四",5:"五",6:"六",7:"七",8:"八",9:"九",10:"十",0:"零"
 }
 
-def get_pure_docx_text(filepath: str) -> str:
+def get_pure_docx_text(filepath: Union[str, Path]) -> str:
     """
     extract pure text from a given .docx file, including **auto numbered list items**,
     which cannot be extracted by simply reading the paragraph text.
@@ -120,8 +206,7 @@ def get_pure_docx_text(filepath: str) -> str:
     Raises:
         ValueError: If the file path is not a valid .docx file
     """
-    if not filepath.lower().endswith('.docx'):
-        raise ValueError(f"{filepath} not exists")
+
     doc = Document(filepath)
 
     try:
@@ -191,6 +276,21 @@ def get_pure_text(filepath: str) -> str:
         case _:
             raise ValueError(f"Unsupported file type: {filepath}")
 
+
+async def request_mineru(
+    request_id: str,
+    output_format: Literal["json", "markdown"],
+    file_stream:bytes,
+    filename:str,
+):
+    formdata = aiohttp.FormData()
+    formdata.add_field("file",file_stream,filename=filename,)
+    formdata.add_field("request_id",request_id)
+    formdata.add_field("output_format", output_format)
+    async with HTTP_CLIENT.post(MINERU_URL, data=formdata) as aresp:
+        aresp.raise_for_status()
+        data= await aresp.json()
+        return data
 
 
 if __name__ == "__main__":
