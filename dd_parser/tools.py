@@ -10,8 +10,8 @@ import fitz  # PyMuPDF
 from docx import Document
 from docx.oxml.ns import qn
 
-from dd_parser.logg import logger
-from dd_parser.config import MINERU_URL, HTTP_CLIENT
+from .logg import logger
+from .config import MINERU_URL, HTTP_CLIENT
 
 T = TypeVar("T")
 

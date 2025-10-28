@@ -3,7 +3,7 @@ import sys
 
 from loguru import logger
 
-from dd_parser.config import LOG_LEVEL
+from .config import LOG_LEVEL
 
 folder_ = "./log/"
 rotation_ = "10 MB"
