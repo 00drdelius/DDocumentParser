@@ -11,3 +11,4 @@ rich
 aiofiles
 requests
 loguru
+python-multipart
