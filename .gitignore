@@ -11,3 +11,4 @@ instances/
 log/
 
 **/*.ipynb
+test/*.md
