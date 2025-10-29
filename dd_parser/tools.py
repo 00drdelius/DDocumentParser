@@ -24,23 +24,30 @@ async def async_wrapper(callable: Callable[..., T], *args, **kwargs)-> Optional[
 def check_libreoffice():
     try:
         #NOTE set `check=True` to raise exception if command fails
-        process = subprocess.run(["soffice", "--version"],shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.run(
+            ["soffice", "--version"],shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except (subprocess.CalledProcessError, FileNotFoundError):
         raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
     else:
         if process.returncode!=0:
             raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
+        logger.info(f"[detect libreoffice] {process.stdout.decode("utf8")}")
 
 
 async def acheck_libreoffice():
     try:
-        process = await asubprocess.create_subprocess_exec(*["soffice", "--version"], stdout=asubprocess.PIPE, stderr=asubprocess.PIPE)
+        #NOTE `asubprocess.create_subprocess_exec` on Windows pops up a terminal to output the result. I don't want it.
+        # process = await asubprocess.create_subprocess_exec(
+            # *["soffice", "--version"],stdout=asubprocess.PIPE, stderr=asubprocess.PIPE)
+        process = await asubprocess.create_subprocess_shell(
+            "soffice --version", stdout=asubprocess.PIPE, stderr=asubprocess.PIPE,)
         stdout, stderr = await process.communicate()
     except (FileNotFoundError, subprocess.CalledProcessError):
         raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
     else:
         if process.returncode!=0:
             raise OSError("LibreOffice is not installed or unavailable. Please install LibreOffice and ensure it is in the system PATH.")
+        logger.info(f"[detect libreoffice] {stdout.decode("utf8")}")
 
 
 def convert_docs_to_docxs(
