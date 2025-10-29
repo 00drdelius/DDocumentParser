@@ -38,14 +38,26 @@ class ParsedFormData(BaseModel):
 
     re_matchers: Optional[List[str]] = Field(
         default=None,
-        title="regular expression",
+        title="regular expression splitter",
         description=(
-            "[Advanced] general regular expression to match the separator(s)( which devides text chunks).\n\n"
-            "Like '章节一', '第一条', 'A.1.1', etc.\n\n"
-            "Also you could upload multi expressions to split text with, like, '第一章', '第一章...第一条', etc."
+            "[Advanced] general regular expressions to match the separator(s)(which devides text chunks)"
+            " like '章节一', '第一条', 'A.1.1', etc.\n\n"
+            "Also you could upload multi expressions to split text with, like, '第一章', '第一章...第一条', etc.\n\n"
+            "[NOTE] currently only support two re splitters\n\n"
+            "[NOTE] You don't need to append line break like “.*(?=\\n)”. Line breaks are removed before preprocessing."
         )
     )
-    "regular matcher(s), to match the separator to devide the text chunks"
+    "regular matcher(s). To match the separator(s) to devide the text chunks"
+
+    ignore_matchers: Optional[List[str]] = Field(
+        default=None,
+        title="regular expression ignorer",
+        description=(
+            "[Advaned] regular expressions to match the text needs to be ignored(deleted).\n\n"
+            "[NOTE] You don't need to append line break like “.*(?=\\n)”. Line breaks are removed before preprocessing."
+        )
+    )
+    "regular matcher(s). To match the texts need to be ignored(deleted)."
 
     filename_in_chunk: bool = Field(
         default=False,
@@ -60,6 +72,7 @@ class ParsedFormData(BaseModel):
     "otuput format you want. support:['json', 'txt']"
 
     length_limit: Optional[int] = Field(
+        default=None,
         title="length limit",
         description="max length in a chunk. Every length of chunk <= length_limit. **Only used when `output_format==txt`**",)
     "max length in a chunk. Every length of chunk <= length_limit. **Only used when `output_format==txt`**"
