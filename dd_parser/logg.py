@@ -17,8 +17,8 @@ logger.remove() #NOTE remove all preset logger
 format_ = (
 '<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> '
 # '| <magenta>{process}</magenta>:<yellow>{thread}</yellow> ' #NOTE 
-'| <cyan>{name}</cyan>:<cyan>{function}</cyan>:<yellow>{line}</yellow> - <level>{message}</level>'
-)
+'| <cyan>{file}</cyan>:<yellow>{line}</yellow>@<cyan>{function}</cyan> - <level>{message}</level>'
+) #NOTE {file}:{line}@{function} allows you to directly trace back to the executing line in vscode.
 
 
 logger.add(
