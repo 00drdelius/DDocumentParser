@@ -10,13 +10,16 @@ class SupportedFileTypes(enum.Enum):
     DOC = "doc"
     DOCX = "docx"
     PDF = "pdf"
+    MD = "md"
+    TXT = "txt"
     XLSX = "xlsx"
     XLS = "xls"
 
     @classmethod
     def get_developed(cls):
         """get file types that are developed"""
-        return [cls.DOCX.value, cls.DOC.value, cls.PDF.value]
+        return [cls.DOCX.value, cls.DOC.value, cls.PDF.value, cls.MD.value, cls.TXT.value]
+
 
 OutputFormat:TypeAlias = Literal["json","txt"]
 
@@ -33,12 +36,12 @@ class ParsedFormData(BaseModel):
         description="upload the file needs to be parsed")
     "upload the file needs to be parsed"
 
-    re_matchers: Optional[Union[str, List[str]]] = Field(
+    re_matchers: Optional[List[str]] = Field(
         default=None,
         title="regular expression",
         description=(
-            "[Advanced] general regular expression to match the separator(s)( which devides text chunks)."
-            "Like '章节一', '第一条', 'A.1.1', etc."
+            "[Advanced] general regular expression to match the separator(s)( which devides text chunks).\n\n"
+            "Like '章节一', '第一条', 'A.1.1', etc.\n\n"
             "Also you could upload multi expressions to split text with, like, '第一章', '第一章...第一条', etc."
         )
     )

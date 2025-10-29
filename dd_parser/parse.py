@@ -4,10 +4,10 @@ from pathlib import Path
 
 from aiofiles import open as aopen
 
-from dd_parser.logg import logger
-from dd_parser.config import TEMP_DIR
-from dd_parser.schemas import ParsedFormData
-from dd_parser.tools import (
+from .logg import logger
+from .config import TEMP_DIR
+from .schemas import ParsedFormData
+from .tools import (
     async_wrapper,
     get_pure_docx_text,
     aconvert_docs_to_docxs,
@@ -261,14 +261,17 @@ async def preprocess_before_chunk(formdata: ParsedFormData):
                 output_format="markdown",
                 file_stream=file_stream,
                 filename=filename)
+        case ".md" | ".txt":
+            async with aopen(str(temp_filepath),'r') as arf:
+                text = await arf.read()
         case _:
             raise ValueError(f"Unsupported file format: {filename}")
     patterns = formdata.re_matchers
     if not patterns:
         patterns = get_regex_pattern(text)
-    elif isinstance(patterns, str):
-        patterns = re.compile(patterns)
-    elif isinstance(patterns, list):
+    elif len(patterns)==1:
+        patterns = re.compile(patterns[0])
+    else:
         patterns = [re.compile(i) for i in patterns]
 
     if isinstance(patterns, re.Pattern):
@@ -319,7 +322,7 @@ async def preprocess_before_chunk(formdata: ParsedFormData):
         if length_limit:
             #NOTE write into file for the last part && if whole document length < length_limit
             formated_text+=written_line
-        return slices
+        return formated_text
 
     return slices
     
