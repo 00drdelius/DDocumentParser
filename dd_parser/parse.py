@@ -4,19 +4,33 @@ from pathlib import Path
 
 from aiofiles import open as aopen
 
-from .logg import logger
-from .config import TEMP_DIR
-from .schemas import ParsedFormData
-from .tools import (
-    async_wrapper,
-    get_pure_docx_text,
-    aconvert_docs_to_docxs,
-    request_mineru,
-)
+if __name__ == '__main__':
+    import sys
+    sys.path.append(str(Path(__file__).parent.parent))
+    from dd_parser.logg import logger
+    from dd_parser.config import TEMP_DIR
+    from dd_parser.schemas import ParsedFormData
+    from dd_parser.tools import (
+        async_wrapper,
+        get_pure_docx_text,
+        aconvert_docs_to_docxs,
+        request_mineru,
+    )
+else:
+    from .logg import logger
+    from .config import TEMP_DIR
+    from .schemas import ParsedFormData
+    from .tools import (
+        async_wrapper,
+        get_pure_docx_text,
+        aconvert_docs_to_docxs,
+        request_mineru,
+    )
+
 savebytes_dir = TEMP_DIR / "save_bytes"
 doc_converted_dir = TEMP_DIR / "doc_converted"
-savebytes_dir.mkdir(exist_ok=False)
-doc_converted_dir.mkdir(exist_ok=False)
+savebytes_dir.mkdir(exist_ok=True)
+doc_converted_dir.mkdir(exist_ok=True)
 
 
 regex_patterns = {
@@ -94,6 +108,7 @@ def get_regex_pattern(pure_text: str) -> tuple[Optional[re.Pattern], Optional[re
 def single_pattern_preprocess(
     pure_text:str,
     chapter_pattern:re.Pattern,
+    ignore_patterns:List[re.Pattern]=[],
 ) -> list[dict[str,str]]:
     """
     Preprocess file to extract chapters by single pattern
@@ -112,6 +127,7 @@ def single_pattern_preprocess(
     Args:
         pure_text (str): The pure text extracted from the document
         chapter_pattern (re.Pattern): The regex pattern for chapter
+        ignore_patterns (List[re.Pattern]): text patterns are ignored once matched
     """
     slices = []
     lines = pure_text.splitlines()
@@ -119,6 +135,14 @@ def single_pattern_preprocess(
     for line in lines:
         line = line.strip()
         if not line:
+            continue
+        
+        detect_ignore=False
+        for ignore_pattern in ignore_patterns:
+            if ignore_pattern.search(line):
+                detect_ignore=True
+                break
+        if detect_ignore:
             continue
 
         if chapter_pattern.search(line):
@@ -147,6 +171,7 @@ def double_patterns_preprocess(
     pure_text:str,
     chapter_pattern:re.Pattern,
     article_pattern:re.Pattern,
+    ignore_patterns: List[re.Pattern]=[],
 ) -> list[dict[str,str]]:
     """
     Preprocess file to extract chapters and articles by parent and child patterns.
@@ -170,6 +195,7 @@ def double_patterns_preprocess(
         pure_text (str): The pure text extracted from the document
         chapter_pattern (re.Pattern): The regex pattern for chapter
         article_pattern (re.Pattern): The regex pattern for article
+        ignore_patterns (List[re.Pattern]): text patterns are ignored once matched
     """
     lines = pure_text.splitlines()
     last_chapter = ""
@@ -181,6 +207,15 @@ def double_patterns_preprocess(
     for line in lines:
         line = line.strip()
         if not line:
+            continue
+        
+        detect_ignore=False
+        for ignore_pattern in ignore_patterns:
+            if ignore_pattern.search(line):
+                detect_ignore=True
+                break
+        if detect_ignore:
+            logger.debug("detect ignore line: %s"%line)
             continue
 
         # encounter new chapter
@@ -269,30 +304,35 @@ async def preprocess_before_chunk(formdata: ParsedFormData):
     patterns = formdata.re_matchers
     if not patterns:
         patterns = get_regex_pattern(text)
-    elif len(patterns)==1:
-        patterns = re.compile(patterns[0])
     else:
         patterns = [re.compile(i) for i in patterns]
 
-    if isinstance(patterns, re.Pattern):
+    ignore_patterns = formdata.ignore_matchers
+    if ignore_patterns:
+        ignore_patterns = [re.compile(i) for i in ignore_patterns]
+
+    if len(patterns)==1:
         print("✅ Detected only single pattern, jump to single patterns preprocess...")
-        slices = single_pattern_preprocess(text, patterns)
-    elif isinstance(patterns, List, Tuple):
+        slices = single_pattern_preprocess(text, patterns, ignore_patterns)
+    elif len(patterns)==2:
         chapter_pattern, article_pattern = patterns
         if not chapter_pattern or not article_pattern:
-            print("❌ No matching chapter/article pattern found, returns the whole text as a single chunk.")
+            logger.warning("❌ No matching chapter/article pattern found, returns the whole text as a single chunk.")
             slices = [{
                 "chapter": "",
                 "article": "",
                 "content": text
             }]
         else:
-            print("✅ Detected both chapter and article patterns, jump to double patterns preprocess...")
+            logger.info("✅ Detected both chapter and article patterns, jump to double patterns preprocess...")
             slices = double_patterns_preprocess(
                 pure_text=text,
                 chapter_pattern=chapter_pattern,
-                article_pattern=article_pattern
+                article_pattern=article_pattern,
+                ignore_patterns=ignore_patterns
             )
+    else:
+        raise ValueError(f"`re_matchers` only support 2 patterns currently. You upload {len(patterns)} re_matchers.")
 
     logger.info(f"✅ [preprocessing done] {len(slices)} chunks in total")
     # txt_slices=splitter.join([f"{filename}\n{slice['chapter']}\n{slice['content']}" for slice in slices])
@@ -327,4 +367,22 @@ async def preprocess_before_chunk(formdata: ParsedFormData):
     return slices
     
 
-    
+if __name__ == '__main__':
+    import json
+    text=open(
+        r"D:\workspaces\source_codebase\DDocumentParser\test\appendix A_MinerU__20251028134915.md",
+        'r',encoding='utf8'
+    ).read()
+    re_matchers=[
+        re.compile(r"#\s\w.\d{1,2}.\d{1,2}\s.*"),
+        re.compile(r"#\s\w.\d{1,2}.\d{1,2}.\d{1,2}\s.*")]
+    # A.1 神经内科、神经外科、精神科门
+    ignore_matchers=[
+        re.compile(r"#\s\w.\d{1,2}\s.*")]
+    slices=double_patterns_preprocess(
+        text, chapter_pattern=re_matchers[0], article_pattern=re_matchers[1],
+        ignore_patterns=ignore_matchers)
+    with open("dd_parser.json",'w') as f:
+        json.dump(slices,f,ensure_ascii=False,indent=2)
+    from shutil import rmtree
+    rmtree(TEMP_DIR)
